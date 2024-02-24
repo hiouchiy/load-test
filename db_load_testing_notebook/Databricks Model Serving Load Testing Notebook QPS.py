@@ -403,20 +403,9 @@ output_dir, run_stats = run_load_test_against_small_workload_size()
 
 # MAGIC %md
 # MAGIC
-# MAGIC ### Step 3.1 - check the load test result
-# MAGIC
-# MAGIC We fixed the __provisioned concurrency at 4__ throughout the load test. In each run, we adjusted __#client-threads__ (i.e. __#parallel-requests__) to see how it affects the QPS and latency. Now go to the next cell to see the summary of the test results.
-# MAGIC
-# MAGIC #### Note: client-side stats vs. server-side stats
-# MAGIC This notebook reports __client-side__ stats, while Databricks Model Serving UI reports __server-side__ stats.
-# MAGIC * Client and server report the __same QPS stats__ but __different latency stats__
-# MAGIC * The difference between __client-side__ latency and __server-side__ latency is decided by the __physical distance__ between client and srever
-# MAGIC * Databricks UI reports QPS/latency stats at __per-minute__ level, while this notebook records QPS/latency at __per-second__ level.
-# MAGIC
-# MAGIC
 # MAGIC ### ステップ 3.1 - 負荷テスト結果の確認
 # MAGIC
-# MAGIC 負荷テストの間、__provisioned concurrency を __4__ に固定しました。各実行で、 __#client-threads__ （すなわち __#parallel-requests__ ）を調整し、それが QPS と待ち時間にどのように影響するかを確認しました。テスト結果の概要を見るには、次のセルに進んでください。
+# MAGIC 負荷テストの間、__provisioned concurrency__ を __4__ に固定しました。各実行で、 __#client-threads__ （すなわち __#parallel-requests__ ）を調整し、それが QPS と待ち時間にどのように影響するかを確認しました。テスト結果の概要を見るには、次のセルに進んでください。
 # MAGIC
 # MAGIC #### 注意: クライアントサイドの統計とサーバーサイドの統計
 # MAGIC このノートブックでは __client-side__ の統計情報を報告しますが、Databricks Model Serving UIでは __server-side__ の統計情報を報告します。
@@ -468,27 +457,6 @@ plt.show()
 
 # MAGIC %md
 # MAGIC
-# MAGIC #### How to interpret the graph above
-# MAGIC Overall, when fixing the __provisioned concurrency at 4__ throughout the load test, as we increase #parallel-requests, __both__ the QPS and latency will increase.
-# MAGIC * when increasing #parallel-requests between __1 - 4__:
-# MAGIC   * QPS increases __fast__
-# MAGIC   * latency increases __slowly__
-# MAGIC   * because queuing effect is not significant at this stage (4 provisioned concurrency means 4 workers, which can handle at most 4 parallel requests at any time)
-# MAGIC * when increasing #parallel-requests beyond __4__:
-# MAGIC   * QPS starts to increase __more slowly__
-# MAGIC   * latency starts to increase __faster__
-# MAGIC   * queuing effect starts to get more significant
-# MAGIC * when increasing #parallel-requests beyond __X__ (X is the largest #parallel-requests in the graph above):
-# MAGIC   * QPS almost __stops__ to increase
-# MAGIC   * latency starts to increase __drastically__
-# MAGIC   * queuing effect gets even more significant
-# MAGIC
-# MAGIC #### How to choose the best parallel_request/provisioned_concurrency ratio
-# MAGIC * If you want the best latency, choose N:4 (N <= 4)
-# MAGIC * If you are willing to trade some latency for better QPS, choose N:4 (4 < N < X)
-# MAGIC * Never choose N:4 (N >= X)
-# MAGIC
-# MAGIC
 # MAGIC #### 上のグラフの解釈
 # MAGIC 全体として、負荷テストを通して __provisioned concurrency4__ に固定した場合、#parallel-requestsを増加させると、QPSとレイテンシーの __両方__ が増加する。
 # MAGIC * 並列リクエスト数を __1～4__ の間で増やした場合：
@@ -512,14 +480,6 @@ plt.show()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC
-# MAGIC ### Step 3.2 - choose the best run_id (if you don't know how to choose, choose run_id 3 with 4 parallel requests)
-# MAGIC
-# MAGIC The load test above might not hit your QPS target, but that's okay because we haven't tried "Medium" or "Large" workload sizes yet. Now we need to know your preferred QPS/latency tradeoff to decide the best __parallel_request : provisioned_concurrency__ ratio.
-# MAGIC
-# MAGIC Please choose the best run_id above and set `BEST_RUN_ID` in the next cell.
-# MAGIC * The best run_id should represent your preferred QPS/latency tradeoff: choose one with relatively high QPS and relatively low latency.
-# MAGIC
 # MAGIC
 # MAGIC ### ステップ3.2 - 最適なrun_idを選択する（選び方がわからない場合は、4並列リクエストでrun_id 3を選択する）。
 # MAGIC
@@ -609,13 +569,9 @@ on '%s' workload to confirm it can hit the expected QPS of %d." % \
 
 # MAGIC %md
 # MAGIC
-# MAGIC ## Step 4 - run load tests on the recommended workload size to hit your QPS target
-# MAGIC
-# MAGIC Please __change__ the workload size of your endpoint as __recommended__ above, and __disable__ scale-to-zero. Make sure your endpoint is __Ready__ with the __new__ workload size before conducting the load test.
-# MAGIC
 # MAGIC ## ステップ 4 - QPS 目標を達成するために、推奨されるワークロードサイズで負荷テストを実行します。
 # MAGIC
-# MAGIC エンドポイントのワークロードサイズを上記の推奨値に__変更__し、scale-to-zeroを__無効__にしてください。負荷テストを実施する前に、エンドポイントが新しいワークロード・サイズで__Ready__であることを確認してください。
+# MAGIC エンドポイントのワークロードサイズを上記の推奨値に　__変更__　し、scale-to-zeroを　__無効__　にしてください。負荷テストを実施する前に、エンドポイントが新しいワークロード・サイズで　__Ready__　であることを確認してください。
 
 # COMMAND ----------
 
@@ -832,26 +788,15 @@ plt.show()
 
 # MAGIC %md
 # MAGIC
-# MAGIC #### How to interpret the graph above
-# MAGIC In the beginning:
-# MAGIC * QPS might be __low__, because we started with __fewer__ #parallel-requests
-# MAGIC * Latency might be __high__, because it takes time to scale up the provisioned concurrency
-# MAGIC
-# MAGIC As we increase #parallel-requests:
-# MAGIC * More provisioned concurrency will be added, as a result of scale-up
-# MAGIC * QPS will start to ramp up, eventually hitting your target
-# MAGIC * Latency will eventually be similar to what we got with the __best run_id__ in __Step 3.2__
-# MAGIC
-# MAGIC
 # MAGIC #### 上のグラフの見方
 # MAGIC 最初のうちは：
 # MAGIC * QPSが低いかもしれない。
 # MAGIC * プロビジョニングされた並列リクエストのスケールアップに時間がかかるため、レイテンシが高くなる可能性がある。
 # MAGIC
-# MAGIC 並列リクエスト数を増やすと、レイテンシは__high__になるかもしれない：
+# MAGIC 並列リクエスト数を増やすと、レイテンシは　__high__　になるかもしれない：
 # MAGIC * プロビジョニングされる同時実行数が増える。
 # MAGIC * QPSが上昇し始め、最終的に目標を達成する。
-# MAGIC * レイテンシは最終的に、__ステップ3.2__の__best run_id__と同じようになります。
+# MAGIC * レイテンシは最終的に、　__ステップ3.2__　の　__best run_id__　と同じようになります。
 
 # COMMAND ----------
 
