@@ -3,8 +3,8 @@
 # MAGIC
 # MAGIC # Databricks QPS(Query per Second) モデルサービング負荷テスト用ノートブック
 # MAGIC
-# MAGIC このノートブックは、最適なものを見つけるのに役立ちます：
-# MAGIC 1) Databricks Model Serving のエンドポイントに最適なワークロードサイズを、スループット目標を考慮して決定します。
+# MAGIC このノートブックは、サービングエンドポイントの最適なサイジングを行うための使用できます：
+# MAGIC 1) Databricks Model Serving のエンドポイントに最適なワークロードサイズをスループット目標を考慮して決定
 # MAGIC 2) スループット/レイテンシーのトレードオフ
 # MAGIC
 # MAGIC スループット目標が 更に大きくなる場合は、代わりに専門的な負荷テストツールの使用を検討してください。例えば、[このチュートリアル](https://github.com/lichenran1234/load-test/blob/main/README.md) を参照して Locust をセットアップしてください。
@@ -63,16 +63,15 @@ import math
 # COMMAND ----------
 
 # DBTITLE 1,エンドポイントのURLおよびデータブリックスのPATをセット
-# String. The full URL of the endpoint to load test against. For example: ENDPOINT = "https://xxx.cloud.databricks.com/serving-endpoints/xxx/invocations"
-ENDPOINT = ""
+# String. The full URL of the endpoint to load test against.
+ENDPOINT = "https://xxx.cloud.databricks.com/serving-endpoints/xxx/invocations"
 
-# String. The token to use for this load test. For example: TOKEN = "dapide256eb400d7130b4c874bd63e6e89d2"
-TOKEN = ""
+# String. The token to use for this load test.
+TOKEN = "dapi7e288b・・・・・"
 
 # COMMAND ----------
 
 # DBTITLE 1,エンドポイントへ送信するデータを準備
-# テスト用の文章データ
 inputs = [
     """
 オーシャンシティに所属するネオランド代表FWアレックス・スターマンが、全体トレーニングに復帰した。13日、クラブ公式サイトが伝えている。
@@ -84,14 +83,16 @@ DATA = json.dumps({
   "inputs": inputs
 })
 
-# COMMAND ----------
-
-# DBTITLE 1,目標のリクエスト並列数
-QPS_TARGET = 1000
+prepped = DATA
 
 # COMMAND ----------
 
-# DBTITLE 1,ここまで設定したパラメーターが正しいか確認するため一度エンドポイントを叩く
+# DBTITLE 1,スループット目標（QPS = Query-per-seconds）
+QPS_TARGET = 100
+
+# COMMAND ----------
+
+# DBTITLE 1,設定したパラメーターの正しさを確認のためエンドポイントを叩く
 session = requests.Session()
 req = requests.Request('POST', ENDPOINT, headers={'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'}, data=DATA)
 prepped = req.prepare()
@@ -122,7 +123,7 @@ if not has_failed_request:
 
 # COMMAND ----------
 
-# DBTITLE 1,負荷テストの所要時間を概算するため、10回ほど連続でエンドポイントを叩く
+# DBTITLE 1,負荷テストの総所要時間を概算のため連続でエンドポイントを叩く
 # Decide the duration of the load test
 num_req = 100
 print("Sending %d requests to warm up the endpoint..." % num_req)
@@ -139,14 +140,11 @@ for i in range(num_req):
 
 latency_p50 = np.percentile(latencies_seconds, 50)
 
-NUM_REQUESTS_EACH_THREAD = 2000
+NUM_REQUESTS_EACH_THREAD = 500
 
 if (latency_p50 > 4):
   estimated_qps_for_64_provisioned_concurrency = 64 / latency_p50
-  print("\nThe P50 latency is roughly %.2f seconds, which is too high for real-time inference. \
-Even the largest workload size (with 64 provisioned concurrency) can only support roughly %.2f \
-QPS. Are you sure you want to run a load test on this model? Feel free to reach out to Databricks \
-for possible optimizations on the model to reduce latency." % (latency_p50, estimated_qps_for_64_provisioned_concurrency))
+  print("\nP50のレイテンシはおよそ%.2f秒であり、リアルタイム推論には高すぎる。最大のワークロードサイズ（64プロビジョニングされた並行性）でも、およそ%.2f QPSしかサポートできません。このモデルの負荷テストを本当に実行したいですか？レイテンシを削減するためのモデルの最適化については、お気軽にDatabricksまでお問い合わせください。" % (latency_p50, estimated_qps_for_64_provisioned_concurrency))
 else:
   latency_p50_ms = latency_p50 * 1000
   estimated_duration_in_seconds_for_each_run = NUM_REQUESTS_EACH_THREAD * latency_p50
@@ -162,20 +160,22 @@ else:
 
 # MAGIC %md
 # MAGIC
-# MAGIC ## Step 3: 負荷テスト（Provisioned Throughput 970 tokens/sec, scale-to-zeroなし）
+# MAGIC ## Step 3: 負荷テスト
 # MAGIC
-# MAGIC エンドポイントに __907 tokens/sec__ ワークロードサイズを使用し、scale-to-zeroを __disable__ にしてください。
+# MAGIC エンドポイントに __Small（4コンカレンシー）__ ワークロードサイズを使用し、scale-to-zeroを __disable__ にしてください。
 # MAGIC
-# MAGIC 負荷テストを実行する前に、エンドポイントが __907 tokens/sec__ ワークロードサイズで __Ready__ であることを確認してください！
+# MAGIC 負荷テストを実行する前に、エンドポイントが __Ready__ であることを確認してください！
 
 # COMMAND ----------
 
-# DBTITLE 1,クライアントあたりいくつのリクエストをシーケンシャルに送信するかの数
+# DBTITLE 1,クライアントあたりの連続送信リクエスト数
 NUM_REQUESTS_EACH_THREAD = 500
 
 # COMMAND ----------
 
-# DBTITLE 1,このセルを実行すると負荷テストが開始する
+# DBTITLE 1,負荷テストを開始（自動停止をOFFにする場合はauto_stop=False）
+auto_stop = True
+
 def load_test_process(process_id, num_threads, output_dir):
   session = requests.Session()
   # TCP connection pool size == num_threads_for_this_process
@@ -346,8 +346,8 @@ def parse_qps_and_latency(timestamp_to_latency_ms_dict):
 
 
 def run_load_test_against_small_workload_size():
-  # NUM_THREADS_FOR_EACH_RUN = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36]
-  NUM_THREADS_FOR_EACH_RUN = [64]#[1, 2, 4, 6, 8, 10, 16, 32, 64]
+  NUM_THREADS_FOR_EACH_RUN = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 28, 32, 36]
+  # NUM_THREADS_FOR_EACH_RUN = [1, 2, 4, 6, 8, 12, 16, 32, 64]
   timestamp = datetime.datetime.now().strftime("load-test-UTC-%Y-%m-%d-%H-%M-%S")
   output_dir = "/tmp/load_tests/" + timestamp
   os.makedirs(output_dir)
@@ -365,7 +365,8 @@ def run_load_test_against_small_workload_size():
     # Check if there were too many failed requests.
     is_result_valid, timestamp_to_latency_ms_dict, err_msg = parse_result(per_run_output_dir)
     if err_msg: print(err_msg)
-    assert is_result_valid, "Exiting the load test due to too many failed requests during run_%d, please debug the failed requests and rerun the load test." % i
+    if auto_stop:
+      assert is_result_valid and auto_stop, "Exiting the load test due to too many failed requests during run_%d, please debug the failed requests and rerun the load test." % i
     
     new_dict, duration_seconds, avg_qps, latency_p50, latency_p90, latency_p99 = parse_qps_and_latency(timestamp_to_latency_ms_dict)
     print("Result of run_%d: duration %d seconds, avg_qps %.2f, latency_p50 %.1f ms, latency_p90 %.1f ms, latency_p99 %.1f ms" % \
@@ -378,7 +379,8 @@ def run_load_test_against_small_workload_size():
       valid_cpu_stats = list(filter(lambda x: x > threshold, cpu_stats))
       p80 = np.percentile(valid_cpu_stats, 80)
       avg = sum(valid_cpu_stats) / len(valid_cpu_stats)
-      assert p80 < 70, "\nCPU utilization was too high during the load test!!! The avg \
+      if auto_stop:
+        assert (p80 < 70) and auto_stop, "\nCPU utilization was too high during the load test!!! The avg \
 CPU utilization across all %d cores was %.1f%%. The load test result will be meaningless \
 under this condition. Please launch a Spark cluster with more CPUs and rerun the load test." % (psutil.cpu_count(), avg)
 
@@ -387,7 +389,7 @@ under this condition. Please launch a Spark cluster with more CPUs and rerun the
       print("\nThe QPS of this run (%.2f) exceeded your QPS target (%d) already! Exiting the load test..." % (avg_qps, QPS_TARGET))
       break
     
-    if qps_saturated:
+    if qps_saturated and auto_stop:
       break
     if i >= 3:
       if avg_qps < run_stats[i-1][2]: qps_saturated = True
@@ -405,17 +407,17 @@ output_dir, run_stats = run_load_test_against_small_workload_size()
 # MAGIC
 # MAGIC ### ステップ 3.1 - 負荷テスト結果の確認
 # MAGIC
-# MAGIC 負荷テストの間、__provisioned concurrency__ を __4__ に固定しました。各実行で、 __#client-threads__ （すなわち __#parallel-requests__ ）を調整し、それが QPS と待ち時間にどのように影響するかを確認しました。テスト結果の概要を見るには、次のセルに進んでください。
+# MAGIC 負荷テストの間、__provisioned concurrency__ を __4__ に固定しました。各実行で、 __同時リクエスト数__ （すなわち __スレッド数__ ）を調整し、それが QPS と待ち時間にどのように影響するかを確認しました。テスト結果の概要を見るには、次のセルに進んでください。
 # MAGIC
 # MAGIC #### 注意: クライアントサイドの統計とサーバーサイドの統計
-# MAGIC このノートブックでは __client-side__ の統計情報を報告しますが、Databricks Model Serving UIでは __server-side__ の統計情報を報告します。
-# MAGIC * クライアントとサーバーは __同じQPS統計__ を報告しますが、 __異なるレイテンシ統計__ を報告します。
-# MAGIC * クライアント側のレイテンシとサーバー側のレイテンシの差は、クライアントとサーバー間の物理的な距離によって決まります。
-# MAGIC * Databricks UIではQPS/レイテンシ統計は __per-minute__ レベルで報告されますが、このノートブックではQPS/レイテンシは __per-second__ レベルで記録されます。
+# MAGIC このノートブックでは __クライアント側__ の統計情報に焦点を当てますが、DatabricksのModel Serving UIでは __サーバー側__ の統計情報を報告します。
+# MAGIC * クライアントとサーバーは __同じQPS統計__ を表示しますが、 __異なるレイテンシー統計__ を表示します。
+# MAGIC * クライアント側のレイテンシーとサーバー側のレイテンシーの差は、クライアントとサーバー間の物理的なネットワーク距離によって決定されます。
+# MAGIC * DatabricksのModel Serving UIでは、QPS/レイテンシ統計は __分単位__ で表示されますが、このノートブックではQPS/レイテンシは __秒単位__ で記録されます。
 
 # COMMAND ----------
 
-# DBTITLE 1,Run this cell to print a summary of the load test runs
+# DBTITLE 1,負荷テストの結果を表示する
 cols = ["run_id", "#parallel_requests", "duration (seconds)", "avg qps for the whole run", "latency_ms_p50", "latency_ms_p90", "latency_ms_p99"]
 data = []
 num_parallel_requests_list = []
@@ -458,24 +460,24 @@ plt.show()
 # MAGIC %md
 # MAGIC
 # MAGIC #### 上のグラフの解釈
-# MAGIC 全体として、負荷テストを通して __provisioned concurrency4__ に固定した場合、#parallel-requestsを増加させると、QPSとレイテンシーの __両方__ が増加する。
-# MAGIC * 並列リクエスト数を __1～4__ の間で増やした場合：
-# MAGIC   * QPSは __速く__ 増加する。
-# MAGIC   * 待ち時間は __ゆっくり__ と増加する。
-# MAGIC   * キューイング効果はこの段階では大きくないからです (4 プロビジョニングされた同時実行数は 4 ワーカーを意味し、4 ワーカーが最大 4 リクエストの並列リクエストを処理できます)。
-# MAGIC * 並列リクエスト数が 4 を超えると、QPS は増加し始めます：
-# MAGIC   * QPS は __よりゆっくりと__ 増加し始める。
-# MAGIC   * 待ち時間はより速く増加し始める
-# MAGIC   * 待ち時間がより速く増加し始める
-# MAGIC * 並列リクエスト数が __X__ （上のグラフではXが最大の並列リクエスト数）を超えて増加した場合：
-# MAGIC   * QPSはほとんど __増加しなくなる__ 。
-# MAGIC   * レイテンシは __ドラスティック__ に増加し始める。
-# MAGIC   * 待ち行列効果はさらに大きくなる
+# MAGIC 全体として、負荷テストを通して __プロビジョニングされた同時実行数（provisioned concurrency）__ を4に固定した場合、同時リクエスト数（#parallel-requests）を増加させると、QPS（スループット）とレイテンシーの __両方__ が増加する。
+# MAGIC * 同時リクエスト数を __1～4__ の間で増やした場合：
+# MAGIC   * QPSは __速く__ 増加する
+# MAGIC   * レイテンシーは __ゆっくり__ と増加する
+# MAGIC   * キューイング効果はこの段階では大きくないからです (4 provisioned concurrencyは 4 ワーカーを意味し、4 ワーカーが最大 4 リクエストの並列リクエストを処理できます)
+# MAGIC * 同時リクエスト数を4以上に増やした場合：
+# MAGIC   * QPS は __よりゆっくりと__ 増加し始める
+# MAGIC   * レイテンシーはより速く増加し始める
+# MAGIC   * キューイング効果が顕著になり始める
+# MAGIC * 同時リクエスト数が __X__ （上のグラフではXが最大の同時リクエスト数）を超えて増加した場合：
+# MAGIC   * QPSはほとんど __増加しなくなる__ 
+# MAGIC   * レイテンシーは __ドラスティック__ に増加し始める
+# MAGIC   * キューイング効果はさらに大きくなる
 # MAGIC
-# MAGIC #### 最適な並列リクエスト/プロビジョニング済み同時実行数の比率を選択する方法
-# MAGIC * レイテンシを最良にしたいのであれば、N:4 (N <= 4) を選択する。
-# MAGIC * QPS を向上させるためにレイテンシを多少犠牲にしてもよいのであれば、 N:4 (4 < N < X) を選択する。
-# MAGIC * 決してN:4（N >= X）を選択しないでください。
+# MAGIC #### 最適な同時リクエスト/プロビジョニング済み同時実行数の比率を選択する方法
+# MAGIC * レイテンシを最良にしたいのであれば、N:4 (N <= 4) を選択する
+# MAGIC * QPS を向上させるためにレイテンシを多少犠牲にしてもよいのであれば、 N:4 (4 < N < X) を選択する
+# MAGIC * 決してN:4（N >= X）を選択しないでください
 
 # COMMAND ----------
 
@@ -483,22 +485,22 @@ plt.show()
 # MAGIC
 # MAGIC ### ステップ3.2 - 最適なrun_idを選択する（選び方がわからない場合は、4並列リクエストでrun_id 3を選択する）。
 # MAGIC
-# MAGIC 上記の負荷テストはQPS目標を達成しないかもしれないが、まだ「Medium」や「Large」のワークロードサイズを試していないので大丈夫だ。最適な __parallel_request : provisioned_concurrency__ ratioを決定するために、ご希望のQPS/レイテンシーのトレードオフを知る必要があります。
+# MAGIC 上記の負荷テストはQPS目標を達成しないかもしれませんが、まだ「Medium」や「Large」のワークロードサイズを試していないので大丈夫です。最適な __「同時リクエスト数」 : 「プロビジョニングされた同時実行数」__ の率を決定するために、ご希望のQPS/レイテンシーのトレードオフを知る必要があります。
 # MAGIC
 # MAGIC 最適なrun_idを選択し、次のセルに`BEST_RUN_ID`を設定してください。
 # MAGIC * 最良のrun_idは、あなたの好みのQPS/レイテンシ・トレードオフを表すべきです：比較的QPSが高く、比較的レイテンシが低いものを選んでください。
 
 # COMMAND ----------
 
-# DBTITLE 1,Run this cell to set the best run_id
-# Set the parameter below. For example: BEST_RUN_ID = 3
+# DBTITLE 1,ベストなrun_idを設定
+# 以下のパラメータを設定します。例えば BEST_RUN_ID = 3
 BEST_RUN_ID = 3
 
-print("You've chosen run_%d. So we'll use %d client threads for every 4 provisioned concurrency, to keep the parallel_request : provisioned_concurrency ratio at %d : 4 when trying out 'Medium' or 'Large' workload sizes." % (BEST_RUN_ID, run_stats[BEST_RUN_ID][1], run_stats[BEST_RUN_ID][1]))
+print("run_%dを選択しました。つまり、'Medium' または 'Large' ワークロード・サイズを試すときに、並列要求 : プロビジョニングされた同時実行数の比率を %d : 4 に保つために、プロビジョニングされた同時実行数 4 ごとに %d 個のクライアント・スレッドを使用します。" % (BEST_RUN_ID, run_stats[BEST_RUN_ID][1], run_stats[BEST_RUN_ID][1]))
 
 # COMMAND ----------
 
-# DBTITLE 1,Run this cell to render the per-second QPS & latency graph of the run_id you chose
+# DBTITLE 1,選択したrun_idの秒ごとのQPSとレイテンシのグラフを表示
 run_result = run_stats[BEST_RUN_ID]
 timestamp_to_latency_ms_dict = run_result[0]
 
@@ -536,7 +538,7 @@ plt.show()
 
 # COMMAND ----------
 
-# DBTITLE 1,Run this cell to get the recommended workload size
+# DBTITLE 1,推奨ワークロードサイズを得る
 qps_for_4_provisioned_concurrency = run_stats[BEST_RUN_ID][2]
 parallel_requests_for_4_provisioned_concurrency = run_stats[BEST_RUN_ID][1]
 
@@ -557,13 +559,10 @@ else:
     workload_range = '16 - 64'
   
   if recommended_workload:
-    print("The recommended provisioned concurrency is %d, which falls into \
-the range of %s. So the recommended workload size is '%s', and the recommended \
-#parallel-requests is %d. Please go to the next step to try %d parallel requests \
-on '%s' workload to confirm it can hit the expected QPS of %d." % \
+    print("推奨されるプロビジョニング同時実行数は %d で、%s の範囲に入ります。推奨ワークロード・サイズは '%s' で、推奨 同時リクエスト数は %d です。次のステップに進んで、%d 個の並列要求で '%s' ワークロードを試し、ゴールとして設定されている QPS %d を達成できることをご確認ください。" % \
           (num_provisioned_concurrency_needed, workload_range, recommended_workload, num_parallel_requsts_needed, num_parallel_requsts_needed, recommended_workload, QPS_TARGET))
   else:
-    print("The recommended provisioned concurrency is %d, which exceeds the upperbound (64) of the 'Large' workload. Please reach out to Databricks to get a custom workload (with %d provisioned concurrency) for the Model Serving endpoints in your workspace. If you think this is too high, please reach out to Databricks to see how the model can be optimized to reduce the latency. Reduced latency means less provisioned concurrency needed to reach the same QPS." % (num_provisioned_concurrency_needed, num_provisioned_concurrency_needed))
+    print("推奨されるプロビジョニング同時実行数は %d で、'Large' ワークロードの上限 (64) を超えています。Databricks に連絡して、ワークスペース内の Model Serving エンドポイントのカスタムワークロード (%d のプロビジョニング同時実行数) を取得してください。これが高すぎると思われる場合は、Databricks に連絡して、レイテンシを減らすためにモデルをどのように最適化できるか確認してください。レイテンシーが減るということは、同じ QPS に到達するために必要なプロビジョニングされた同時実行数が減るということです。" % (num_provisioned_concurrency_needed, num_provisioned_concurrency_needed))
 
 # COMMAND ----------
 
@@ -575,7 +574,7 @@ on '%s' workload to confirm it can hit the expected QPS of %d." % \
 
 # COMMAND ----------
 
-# DBTITLE 1,Run this cell to perform the load test (will gradually ramp up #parallel-requests)
+# DBTITLE 1,負荷テストを実行する（徐々に#parallel-requestsを増やしていく）
 def load_test_process_with_fixed_duration(process_id, num_threads, output_dir, duration_seconds):
   session = requests.Session()
   # TCP connection pool size == num_threads_for_this_process
@@ -739,7 +738,7 @@ timestamp_to_latency_ms_dict = run_load_test_against_recommended_workload_size()
 
 # COMMAND ----------
 
-# DBTITLE 1,Run this cell to draw a graph of per-10-second QPS/latency of the load test above
+# DBTITLE 1,上記の負荷テストの10秒あたりのQPS/レイテンシーのグラフを描く
 # Aggregate the stats at per-10s level
 aggregated_dict = defaultdict(list)
 for key, val in timestamp_to_latency_ms_dict.items():
@@ -790,12 +789,12 @@ plt.show()
 # MAGIC
 # MAGIC #### 上のグラフの見方
 # MAGIC 最初のうちは：
-# MAGIC * QPSが低いかもしれない。
-# MAGIC * プロビジョニングされた並列リクエストのスケールアップに時間がかかるため、レイテンシが高くなる可能性がある。
+# MAGIC * QPSが低いかもしれません
+# MAGIC * プロビジョニングされた同時実行数のスケールアップに時間がかかるため、レイテンシが高くなる可能性があります
 # MAGIC
-# MAGIC 並列リクエスト数を増やすと、レイテンシは　__high__　になるかもしれない：
-# MAGIC * プロビジョニングされる同時実行数が増える。
-# MAGIC * QPSが上昇し始め、最終的に目標を達成する。
+# MAGIC 同時リクエスト数を増やすと、レイテンシは　__high__　になるかもしれない：
+# MAGIC * プロビジョニングされた同時実行数が増加
+# MAGIC * QPSが上昇し始め、最終的に目標を達成
 # MAGIC * レイテンシは最終的に、　__ステップ3.2__　の　__best run_id__　と同じようになります。
 
 # COMMAND ----------
